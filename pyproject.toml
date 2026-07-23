@@ -1,0 +1,16 @@
+[project]
+name = "010-chroma-extraction"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "essentia>=2.1b6.dev1438",
+    "matplotlib>=3.11.1",
+    "opencv-python-headless>=5.0.0.93",
+    "pyqt5>=5.15.11",
+    "scikit-learn>=1.9.0",
+    "scipy>=1.18.0",
+    "sounddevice>=0.5.5",
+    "tk>=0.1.0",
+]

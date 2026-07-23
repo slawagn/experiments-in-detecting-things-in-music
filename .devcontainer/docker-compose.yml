@@ -1,0 +1,20 @@
+services:
+  dsp_playground:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    command: sleep infinity
+    volumes:
+      - ..:/workspace:cached
+      - $XDG_RUNTIME_DIR/pipewire-0:/tmp/pipewire-0
+      - $XDG_RUNTIME_DIR/pulse/native:/tmp/pulse.socket
+      - $XDG_RUNTIME_DIR/bus:/tmp/bus
+      - $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    environment:
+      - PIPEWIRE_RUNTIME_DIR=/tmp
+      - PULSE_SERVER=/tmp/pulse.socket
+      - DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/bus
+      - XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR
+      - WAYLAND_DISPLAY=$WAYLAND_DISPLAY
+      - DISPLAY=$DISPLAY

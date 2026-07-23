@@ -1,0 +1,21 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/python
+{
+	"name": "Python 3",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	// "build": {
+	// 	"dockerfile": "Dockerfile"
+	// },
+	"dockerComposeFile": "docker-compose.yml",
+	"service": "dsp_playground",
+	"workspaceFolder": "/workspace",
+	"shutdownAction": "stopCompose",
+	// "containerEnv": {
+	// 	"PIPEWIRE_RUNTIME_DIR": "/tmp",
+	// 	"PULSE_SERVER": "/tmp/pulse.socket"
+	// },
+	// "mounts": [
+	// 	"source=$XDG_RUNTIME_DIR/pipewire-0,target=/tmp/pipewire-0",
+	// 	"source=$XDG_RUNTIME_DIR/pulse/native,target=/tmp/pulse.socket"
+	// ]
+}
