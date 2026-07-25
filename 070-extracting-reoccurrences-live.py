@@ -14,11 +14,16 @@ import essentia.standard as estd
 from essentia.pytools.spectral import hpcpgram
 from scipy.signal import correlate
 import cv2
+from skimage.morphology import skeletonize
 # fmt: on
 
 
-AUDIOBUF_WINDOW_LEN = 48000
-PHRASEBUF_LEN = 150
+AUDIOBUF_WINDOW_LEN = 48000  # samples
+HOPSIZE = 2000  # samples per frame
+FRAMES_PER_SECOND = AUDIOBUF_WINDOW_LEN / HOPSIZE
+PHRASEBUF_LEN = 150  # frames
+SIMILARITY_THRESHOLD = 25
+
 
 kernel = np.eye(PHRASEBUF_LEN)
 
@@ -101,9 +106,20 @@ stream = sd.InputStream(
 hpcp_im = hpcp_subplot.imshow(hpcp.T, aspect='auto', interpolation='none',
                               origin='lower', animated=False,
                               vmin=0., vmax=1.)
+hpcp_secax = hpcp_subplot.secondary_xaxis('top',
+                                          functions=(
+                                              lambda f: f / FRAMES_PER_SECOND,
+                                              lambda s: s * FRAMES_PER_SECOND))
+hpcp_secax.set_xlabel('Seconds')
+
 corr_im = corr_subplot.imshow(corr, aspect='auto', interpolation='none',
                               origin='lower', animated=False,
-                              vmin=0, vmax=127)
+                              vmin=0, vmax=2)
+corr_secax = corr_subplot.secondary_xaxis('top',
+                                          functions=(
+                                              lambda f: f / FRAMES_PER_SECOND,
+                                              lambda s: s * FRAMES_PER_SECOND))
+corr_secax.set_xlabel('Seconds')
 lines = []
 
 
@@ -129,16 +145,19 @@ def update_plots(frame):
         window = audiobuf[:AUDIOBUF_WINDOW_LEN]
         audiobuf = audiobuf[AUDIOBUF_WINDOW_LEN + 1:]
 
-        hpcp_window = hpcpgram(window.ravel(), sampleRate=args.samplerate)
+        hpcp_window = hpcpgram(
+            window.ravel(), sampleRate=args.samplerate, hopSize=HOPSIZE)
         hpcp = np.concatenate((hpcp, hpcp_window), axis=0)
 
         if hpcp.shape[0] > PHRASEBUF_LEN * 2 + 1:
             pair_crp = crp(hpcp[:-PHRASEBUF_LEN], hpcp[-PHRASEBUF_LEN + 1:])
 
-            corr = np.uint8(correlate(pair_crp, kernel))
+            corr = correlate(pair_crp, kernel, mode='same')
             print(corr.max())
-            corr = np.where(corr < 50, 0, corr)
-            corr = cv2.GaussianBlur(corr, (63, 63), 0)
+            corr = np.where(corr < SIMILARITY_THRESHOLD, 0, corr)
+            # corr = cv2.GaussianBlur(corr, (63, 63), 0)
+            corr = skeletonize(corr)
+            corr = np.uint8(corr)
             lines = cv2.HoughLinesP(corr, rho=1, theta=np.pi/180,
                                     threshold=100, minLineLength=50, maxLineGap=10)
 
@@ -150,10 +169,11 @@ def update_plots(frame):
 
         if lines is not None:
             for pair in lines:
-                x1, y1, x2, y2 = pair
-                corr_subplot.plot([y1, y2], [10, 20], color='red')
-                corr_subplot.plot([hpcp.shape[0] - PHRASEBUF_LEN + x1,
-                                  hpcp.shape[0] - PHRASEBUF_LEN + x2], [10, 20], color='blue')
+                y1, x1, y2, x2 = pair
+                print(x1, x2, y1, y2)
+                hpcp_subplot.plot([x1, x2], [0, 1], color='red')
+                hpcp_subplot.plot([hpcp.shape[0] - PHRASEBUF_LEN + y1,
+                                  hpcp.shape[0] - PHRASEBUF_LEN + y2], [0, 1], color='blue')
 
     return [hpcp_im]
 
