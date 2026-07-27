@@ -24,9 +24,9 @@ from skimage.morphology import skeletonize
 AUDIOBUF_WINDOW_LEN = 48000  # samples
 HOPSIZE = 2000  # samples per frame
 FRAMES_PER_SECOND = AUDIOBUF_WINDOW_LEN / HOPSIZE
-PHRASEBUF_LEN = 150  # frames
-SIMILARITY_THRESHOLD = 70
-MIN_MOTIF_LENGTH = 1.5 * FRAMES_PER_SECOND  # frames
+SIMILARITY_THRESHOLD = 42
+MIN_MOTIF_LENGTH = 3.2 * FRAMES_PER_SECOND  # frames
+PHRASEBUF_LEN = int(2 * MIN_MOTIF_LENGTH)  # frames
 
 
 class Motif:
@@ -81,13 +81,14 @@ class MotifTracker:
         newlyFoundFragments = []
         motifsToRemove = []
 
+        previousFragmentLength = previous_occurrence[1] - \
+            previous_occurrence[0]
+
         if not self._motifs:
             newlyFoundFragments.append(previous_occurrence)
         else:
             exMotifsCopy = self._motifs.values()
             appending = True
-            previousFragmentLength = previous_occurrence[1] - \
-                previous_occurrence[0]
             for existingMotif in exMotifsCopy:
                 if not appending:
                     break
@@ -121,42 +122,47 @@ class MotifTracker:
                 #     f"adding {previous_occurrence[0]} {previous_occurrence[1]}")
                 newlyFoundFragments.append(previous_occurrence)
 
-            print(
-                f"new occurrence should not be longer than ({current_occurrence[0]}, {current_occurrence[0] + previousFragmentLength})")
+        print(
+            f"new occurrence should not be longer than ({current_occurrence[0]}, {current_occurrence[0] + previousFragmentLength})")
+        print(
+            f"new occurrence wants to be at {current_occurrence[0]} {current_occurrence[1]}")
 
-            exMotifsCopy = self._motifs.values()
-            appending = True
-            for existingMotif in exMotifsCopy:
-                if not appending:
-                    break
-                if existingMotif.x1 < current_occurrence[0] < existingMotif.x2 < current_occurrence[1]:
-                    # print(
-                    #     f"extending {existingMotif.x1} {existingMotif.x2} to {existingMotif.x1} {current_occurrence[1]}")
-                    existingMotif.x2 = min(
-                        current_occurrence[1], existingMotif.x1 + previousFragmentLength)
-                    # newClass = existingMotif.motifClass
-                    appending = False
-                    # continue
-                elif current_occurrence[0] <= existingMotif.x1 < existingMotif.x2 <= current_occurrence[1]:
-                    # print(
-                    #     f"replacing {existingMotif.x1} {existingMotif.x2} with {current_occurrence[0]} {current_occurrence[1]}")
-                    newClass = existingMotif.motifClass
-                    motifsToRemove.append(self._motifs[existingMotif.x1])
-                    current_occurrence = (current_occurrence[0], min(
-                        current_occurrence[1], current_occurrence[0] + previousFragmentLength))
-                elif existingMotif.x1 <= current_occurrence[0] < current_occurrence[1] <= existingMotif.x2:
-                    # print(
-                    #     f"skipping {current_occurrence[0]} {current_occurrence[1]}")
-                    # newClass = existingMotif.motifClass
-                    appending = False
-                else:
-                    current_occurrence = (current_occurrence[0], min(
-                        current_occurrence[1], current_occurrence[0] + previousFragmentLength))
-                    # print(f"allowing {newFragment[0]} {newFragment[1]} so far")
-            if appending and current_occurrence[1] - current_occurrence[0] > MIN_MOTIF_LENGTH:
+        exMotifsCopy = self._motifs.values()
+        appending = True
+        for existingMotif in exMotifsCopy:
+            if not appending:
+                break
+            if existingMotif.x1 < current_occurrence[0] < existingMotif.x2 < current_occurrence[1]:
+                # print(
+                #     f"extending {existingMotif.x1} {existingMotif.x2} to {existingMotif.x1} {current_occurrence[1]}")
+                existingMotif.x2 = min(
+                    current_occurrence[1], existingMotif.x1 + previousFragmentLength)
+                newClass = existingMotif.motifClass
+                appending = False
+                print("NOT APPENDING BECAUSE EXTENDING")
+                # continue
+            elif current_occurrence[0] <= existingMotif.x1 < existingMotif.x2 <= current_occurrence[1]:
+                # print(
+                #     f"replacing {existingMotif.x1} {existingMotif.x2} with {current_occurrence[0]} {current_occurrence[1]}")
+                newClass = existingMotif.motifClass
+                motifsToRemove.append(self._motifs[existingMotif.x1])
+                current_occurrence = (current_occurrence[0], min(
+                    current_occurrence[1], current_occurrence[0] + previousFragmentLength))
+            elif existingMotif.x1 <= current_occurrence[0] < current_occurrence[1] <= existingMotif.x2:
+                # print(
+                #     f"skipping {current_occurrence[0]} {current_occurrence[1]}")
+                newClass = existingMotif.motifClass
+                appending = False
                 print(
-                    f"adding {current_occurrence[0]} {current_occurrence[1]}")
-                newlyFoundFragments.append(current_occurrence)
+                    "NOT APPENDING BECAUSE ALREADY INCLUDED IN A DIFFERENT FRAGMENT")
+            else:
+                current_occurrence = (current_occurrence[0], min(
+                    current_occurrence[1], current_occurrence[0] + previousFragmentLength))
+                # print(f"allowing {newFragment[0]} {newFragment[1]} so far")
+        if appending and current_occurrence[1] - current_occurrence[0] > MIN_MOTIF_LENGTH:
+            print(
+                f"adding {current_occurrence[0]} {current_occurrence[1]}")
+            newlyFoundFragments.append(current_occurrence)
 
         for m in motifsToRemove:
             del self._motifs[m.x1]
@@ -297,11 +303,11 @@ def update_plots(frame):
             corr = correlate(pair_crp, kernel, mode='same')
             # print(corr.max())
             corr = np.where(corr < SIMILARITY_THRESHOLD, 0, corr)
-            # corr = cv2.GaussianBlur(corr, (63, 63), 0)
+            corr = cv2.GaussianBlur(corr, (3, 3), 0)
             corr = skeletonize(corr)
             corr = np.uint8(corr)
             lines = cv2.HoughLinesP(corr, rho=1, theta=np.pi/180,
-                                    threshold=100, minLineLength=50, maxLineGap=30)
+                                    threshold=50, minLineLength=MIN_MOTIF_LENGTH * 1.4 * 0.8, maxLineGap=MIN_MOTIF_LENGTH * 1.4)
 
         hpcp_im.set_data(hpcp.T)
         hpcp_im.set_extent([0, hpcp.shape[0], 0, 12])
@@ -310,7 +316,7 @@ def update_plots(frame):
         corr_im.set_extent([0, hpcp.shape[0], 0, corr.shape[1]])
 
         if lines is not None:
-            print("lines")
+            # print("lines")
             for l in lines:
                 print(l)
             for pair in lines:
@@ -323,8 +329,8 @@ def update_plots(frame):
                 #     (x1, x2), (hpcp.shape[0] - PHRASEBUF_LEN + y1, hpcp.shape[0] - PHRASEBUF_LEN + y2))
                 tracker.noticeSimilarities(
                     (x1, x2), (hpcp.shape[0] - PHRASEBUF_LEN + y1, hpcp.shape[0] - PHRASEBUF_LEN + y2))
-            print('---')
-            print('motifs')
+            # print('---')
+            # print('motifs')
             # motifClasses = set([m.motifClass for m in tracker.motif.items()])
             # mcColors = dict()
             # for mc in motifClasses:
@@ -337,8 +343,8 @@ def update_plots(frame):
                     [motif.x1, motif.x2], [10, 30], color=mcColors[motif.motifClass], linewidth=20)
 
             corr_im.set_extent([0, hpcp.shape[0], 0, corr.shape[1]])
-            for m in dict(sorted(tracker.motifs.items())).values():
-                print(f"{m.x1} {m.x2} ({m.motifClass})\n")
+            # for m in dict(sorted(tracker.motifs.items())).values():
+            #     print(f"{m.x1} {m.x2} ({m.motifClass})\n")
             print("---")
 
     return [hpcp_im]
