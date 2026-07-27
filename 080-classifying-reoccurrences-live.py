@@ -24,9 +24,10 @@ from skimage.morphology import skeletonize
 AUDIOBUF_WINDOW_LEN = 48000  # samples
 HOPSIZE = 2000  # samples per frame
 FRAMES_PER_SECOND = AUDIOBUF_WINDOW_LEN / HOPSIZE
-SIMILARITY_THRESHOLD = 42
-MIN_MOTIF_LENGTH = 3.2 * FRAMES_PER_SECOND  # frames
-PHRASEBUF_LEN = int(2 * MIN_MOTIF_LENGTH)  # frames
+# SIMILARITY_THRESHOLD = 42
+MIN_MOTIF_LENGTH = 2 * FRAMES_PER_SECOND  # frames
+PHRASEBUF_LEN = int(6 * FRAMES_PER_SECOND)  # frames
+HOUGH_THRESHOLD = 85
 
 
 class Motif:
@@ -75,6 +76,9 @@ class MotifTracker:
                 previous_occurrence[0], current_occurrence[0])
             current_occurrence = (
                 current_occurrence[0], min(current_occurrence[1], current_occurrence[0] + previous_occurrence[1] - previous_occurrence[0]))
+
+        if previous_occurrence[1] - previous_occurrence[0] < MIN_MOTIF_LENGTH or current_occurrence[1] - current_occurrence[0] < MIN_MOTIF_LENGTH:
+            return
 
         newClass = max(
             [m.motifClass for m in self._motifs.values()] or [-1]) + 1
@@ -300,14 +304,15 @@ def update_plots(frame):
         if hpcp.shape[0] > PHRASEBUF_LEN * 2 + 1:
             pair_crp = crp(hpcp[:-PHRASEBUF_LEN], hpcp[-PHRASEBUF_LEN + 1:])
 
-            corr = correlate(pair_crp, kernel, mode='same')
+            # corr = correlate(pair_crp, kernel, mode='same')
+            corr = pair_crp
             # print(corr.max())
-            corr = np.where(corr < SIMILARITY_THRESHOLD, 0, corr)
-            corr = cv2.GaussianBlur(corr, (3, 3), 0)
-            corr = skeletonize(corr)
+            # corr = np.where(corr < SIMILARITY_THRESHOLD, 0, corr)
+            # corr = cv2.GaussianBlur(corr, (7, 7), 0)
+            # corr = skeletonize(corr)
             corr = np.uint8(corr)
             lines = cv2.HoughLinesP(corr, rho=1, theta=np.pi/180,
-                                    threshold=50, minLineLength=MIN_MOTIF_LENGTH * 1.4 * 0.8, maxLineGap=MIN_MOTIF_LENGTH * 1.4)
+                                    threshold=HOUGH_THRESHOLD, minLineLength=MIN_MOTIF_LENGTH * 1.4 * 0.8, maxLineGap=MIN_MOTIF_LENGTH * 1.4 * 0.85)
 
         hpcp_im.set_data(hpcp.T)
         hpcp_im.set_extent([0, hpcp.shape[0], 0, 12])
