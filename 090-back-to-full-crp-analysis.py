@@ -17,7 +17,6 @@ MIN_MOTIF_LENGTH = 5 * FRAMES_PER_SECOND  # frames
 MAX_LINE_GAP = 2 * FRAMES_PER_SECOND
 HOUGH_THRESHOLD = 300
 THEME_START_WINDOW = 5.5 * FRAMES_PER_SECOND
-THEME_END_WINDOW = 5 * FRAMES_PER_SECOND
 
 audio = estd.MonoLoader(
     filename='assets/A Hollowed Skull.mp3', sampleRate=48000)()
@@ -44,20 +43,25 @@ self_crp = np.where(y <= x + MIN_MOTIF_LENGTH, 0, self_crp)
 lines = cv2.HoughLinesP(self_crp, rho=1, theta=np.pi/180,
                         threshold=HOUGH_THRESHOLD, minLineLength=MIN_MOTIF_LENGTH, maxLineGap=MAX_LINE_GAP)
 
-fig, ax = plt.subplots()
-plt.imshow(self_crp, origin='lower')
-ax.secondary_xaxis('top',
-                   functions=(
-                       lambda f: f / FRAMES_PER_SECOND,
-                       lambda s: s * FRAMES_PER_SECOND))
-ax.secondary_yaxis('right',
-                   functions=(
-                       lambda f: f / FRAMES_PER_SECOND,
-                       lambda s: s * FRAMES_PER_SECOND))
-ax.set_xlabel('y')
-ax.set_ylabel('x')
+fig, ax = plt.subplots(2, 1, sharex=True)
+ax[0].imshow(self_crp, origin='lower')
+ax[0].secondary_xaxis('top',
+                      functions=(
+                          lambda f: f / FRAMES_PER_SECOND,
+                          lambda s: s * FRAMES_PER_SECOND))
+ax[0].secondary_yaxis('right',
+                      functions=(
+                          lambda f: f / FRAMES_PER_SECOND,
+                          lambda s: s * FRAMES_PER_SECOND))
+ax[0].set_xlabel('y')
+ax[0].set_ylabel('x')
+ax[1].secondary_xaxis('top',
+                      functions=(
+                          lambda f: f / FRAMES_PER_SECOND,
+                          lambda s: s * FRAMES_PER_SECOND))
+ax[1].set_xlabel('y')
 
-groups = dict()
+groups = defaultdict(lambda: defaultdict(list))
 current_group = []
 
 lines = sorted(lines, key=lambda line: line[1])
@@ -86,6 +90,13 @@ for line in lines:
         current_group = [line]
     else:
         current_group.append(line)
+first_fragment = {
+    'start_x': 0,
+    'end_x': list(groups.keys())[0],
+    'center_x': round(list(groups.keys())[0] / 2),
+    'lines': []
+}
+groups[0] = first_fragment
 
 # trim group ends to start of next group
 keys = sorted(groups.keys())
@@ -149,7 +160,6 @@ for i in range(len(keys)):
                 key = k
         groups[key]['lines'].append(l)
     for rmline in lines_to_remove:
-        print(f"removing {rmline} from {lines_to_remove}")
         groups[start]['lines'] = [l for l in groups[start]
                                   ['lines'] if not np.array_equal(l, rmline)]
 
@@ -205,7 +215,6 @@ for i in range(len(keys)):
                 key = k
         groups[key]['lines'].append(l)
     for rmline in lines_to_remove:
-        print(f"removing {rmline} from {lines_to_remove}")
         groups[start]['lines'] = [l for l in groups[start]
                                   ['lines'] if not np.array_equal(l, rmline)]
 
@@ -222,20 +231,51 @@ for k in keys:
         groups[k]['lines'] = [l for l in groups[k]
                               ['lines'] if not np.array_equal(l, rmline)]
 
+keys = sorted(list(set(list(groups.keys()) + [groups[start]['end_x']
+                                              for start in groups.keys()])))
+
+# find matrix of restatement starts
+restatements = defaultdict(dict)
+for i in range(1, len(keys)):
+    y = keys[i]
+    for j in range(i):
+        x = keys[j]
+        for line in groups[y]['lines']:
+            if abs(line[1] - y) <= 50 and abs(line[0] - x <= 50):
+                restatements[y][x] = True
+                break
+
+for y in restatements.keys():
+    current_occurrence = [y, groups[y]['end_x']]
+    color = random.choice(list(mcolors.CSS4_COLORS.keys()))
+    ax[0].plot([current_occurrence[0], current_occurrence[1]],
+               [0, 100], color=color, linewidth=10)
+    ax[1].plot([current_occurrence[0], current_occurrence[1]],
+               [0, 1], color=color, linewidth=10)
+    for x in restatements[y].keys():
+        # this is hacky, but so is the rest of the code here...
+        if not (groups[x]['end_x'] and groups[y]['end_x']):
+            continue
+        previous_occurrence = [x, groups[x]['end_x']]
+        ax[0].plot([previous_occurrence[0], previous_occurrence[1]],
+                   [0, 100], color=color, linewidth=10)
+        ax[1].plot([previous_occurrence[0], previous_occurrence[1]],
+                   [0, 1], color=color, linewidth=10)
+
 
 random.seed(47)
 for start in groups.keys():
     color = random.choice(list(mcolors.CSS4_COLORS.keys()))
-    ax.plot([0, self_crp.shape[1]], [groups[start]['start_x'],
-            groups[start]['start_x']], color=color)
-    ax.plot([groups[start]['start_x'], groups[start]['start_x']],
-            [0, self_crp.shape[1]], color=color)
-    ax.plot([0, self_crp.shape[1]], [groups[start]['end_x'],
-            groups[start]['end_x']], color=color)
-    ax.plot([groups[start]['end_x'], groups[start]['end_x']],
-            [0, self_crp.shape[1]], color=color)
+    ax[0].plot([0, self_crp.shape[1]], [groups[start]['start_x'],
+                                        groups[start]['start_x']], color=color)
+    ax[0].plot([groups[start]['start_x'], groups[start]['start_x']],
+               [0, self_crp.shape[1]], color=color)
+    ax[0].plot([0, self_crp.shape[1]], [groups[start]['end_x'],
+                                        groups[start]['end_x']], color=color)
+    ax[0].plot([groups[start]['end_x'], groups[start]['end_x']],
+               [0, self_crp.shape[1]], color=color)
     for line in groups[start]['lines']:
         y1, x1, y2, x2 = line
-        ax.plot([y1, y2,], [x1, x2], color=color)
-        ax.scatter([y1, y2,], [x1, x2], color='red', s=10, zorder=2.02)
+        ax[0].plot([y1, y2,], [x1, x2], color=color)
+        ax[0].scatter([y1, y2,], [x1, x2], color='red', s=10, zorder=2.02)
 plt.show()
