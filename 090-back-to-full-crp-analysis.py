@@ -77,12 +77,12 @@ for line in lines:
     if abs(avg_start_x_of_group - x1) > THEME_START_WINDOW:
         i = int(prev_avg_start_x_of_group)
         groups[i] = {
-            'start_y': round(sum([l[1] for l in current_group]) / len(current_group)),
-            'end_y': round(sum([l[3] for l in current_group]) / len(current_group)),
+            'start_x': round(sum([l[1] for l in current_group]) / len(current_group)),
+            'end_x': round(sum([l[3] for l in current_group]) / len(current_group)),
             'lines': current_group
         }
-        groups[i]['center_y'] = round(
-            groups[i]['start_y'] + groups[i]['end_y']) / 2
+        groups[i]['center_x'] = round(
+            groups[i]['start_x'] + groups[i]['end_x']) / 2
         current_group = [line]
     else:
         current_group.append(line)
@@ -93,10 +93,9 @@ for i in range(len(keys)):
     if i >= len(keys) - 1:
         break
     start = keys[i]
-    groups[start]['end_y'] = min(
-        groups[start]['end_y'], groups[keys[i+1]]['start_y'])
+    groups[start]['end_x'] = min(
+        groups[start]['end_x'], groups[keys[i+1]]['start_x'])
 
-print("splitting on starts...")
 # split on all group x starts
 keys = sorted(groups.keys())
 lines_to_append_here = []
@@ -104,17 +103,13 @@ for i in range(len(keys)):
     start = keys[i]
     lines_to_remove = []
     lines_to_append = []
-    # if i >= len(keys):
-    #     break
     for line in groups[start]['lines']:
         y1, x1, y2, x2 = line
         for cutoff in keys:
             if x1 < cutoff < x2:
                 split_x = int(cutoff)
-                # split_y = int(cutoff)
                 slope = (y2 - y1) / (x2 - x1)
                 split_y = round((split_x - x1) * slope + y1)
-                # split_x = round((split_y - y1) / slope) + x1
                 segment1 = np.array([y1, x1, split_y, split_x], dtype='int32')
                 segment2 = np.array([split_y, split_x, y2, x2], dtype='int32')
                 lines_to_remove.append(line)
@@ -124,31 +119,25 @@ for i in range(len(keys)):
         for k in keys:
             if abs(l[1] - k) <= 50:
                 key = k
-        # key = l[0] if l[0] in keys else start
         groups[key]['lines'].append(l)
     for rmline in lines_to_remove:
         groups[start]['lines'] = [l for l in groups[start]
                                   ['lines'] if not np.array_equal(l, rmline)]
 
-print("splitting on ends...")
 # split on all group x ends
 lines_to_append_here = []
 for i in range(len(keys)):
     start = keys[i]
     lines_to_remove = []
     lines_to_append = []
-    # if i >= len(keys):
-    #     break
     for line in groups[start]['lines']:
         y1, x1, y2, x2 = line
         for k in keys:
-            cutoff = groups[k]['end_y']
+            cutoff = groups[k]['end_x']
             if x1 < cutoff < x2:
                 split_x = int(cutoff)
-                # split_y = int(cutoff)
                 slope = (y2 - y1) / (x2 - x1)
                 split_y = round((split_x - x1) * slope + y1)
-                # split_x = round((split_y - y1) / slope) + x1
                 segment1 = np.array([y1, x1, split_y, split_x], dtype='int32')
                 segment2 = np.array([split_y, split_x, y2, x2], dtype='int32')
                 lines_to_remove.append(line)
@@ -158,14 +147,70 @@ for i in range(len(keys)):
         for k in keys:
             if abs(l[1] - k) <= 50:
                 key = k
-        # key = l[0] if l[0] in keys else start
         groups[key]['lines'].append(l)
     for rmline in lines_to_remove:
         print(f"removing {rmline} from {lines_to_remove}")
         groups[start]['lines'] = [l for l in groups[start]
                                   ['lines'] if not np.array_equal(l, rmline)]
 
-print("pruning short fragments...")
+# split on all group y starts
+lines_to_append_here = []
+for i in range(len(keys)):
+    start = keys[i]
+    lines_to_remove = []
+    lines_to_append = []
+    for line in groups[start]['lines']:
+        y1, x1, y2, x2 = line
+        for cutoff in keys:
+            if y1 < cutoff < y2:
+                split_y = int(cutoff)
+                slope = (y2 - y1) / (x2 - x1)
+                split_x = round((split_y - y1) / slope + x1)
+                segment1 = np.array([y1, x1, split_y, split_x], dtype='int32')
+                segment2 = np.array([split_y, split_x, y2, x2], dtype='int32')
+                lines_to_remove.append(line)
+                lines_to_append += [segment1, segment2]
+    for l in lines_to_append:
+        key = start
+        for k in keys:
+            if abs(l[1] - k) <= 50:
+                key = k
+        groups[key]['lines'].append(l)
+    for rmline in lines_to_remove:
+        groups[start]['lines'] = [l for l in groups[start]
+                                  ['lines'] if not np.array_equal(l, rmline)]
+
+# split on all group y ends
+lines_to_append_here = []
+for i in range(len(keys)):
+    start = keys[i]
+    lines_to_remove = []
+    lines_to_append = []
+    for line in groups[start]['lines']:
+        y1, x1, y2, x2 = line
+        for k in keys:
+            cutoff = groups[k]['end_x']
+            if y1 < cutoff < y2:
+                split_y = int(cutoff)
+                slope = (y2 - y1) / (x2 - x1)
+                split_x = round((split_y - y1) / slope + x1)
+                segment1 = np.array([y1, x1, split_y, split_x], dtype='int32')
+                segment2 = np.array([split_y, split_x, y2, x2], dtype='int32')
+                lines_to_remove.append(line)
+                lines_to_append += [segment1, segment2]
+    for l in lines_to_append:
+        key = start
+        for k in keys:
+            if abs(l[1] - k) <= 50:
+                key = k
+        groups[key]['lines'].append(l)
+    for rmline in lines_to_remove:
+        print(f"removing {rmline} from {lines_to_remove}")
+        groups[start]['lines'] = [l for l in groups[start]
+                                  ['lines'] if not np.array_equal(l, rmline)]
+
+
+# prune short fragments
 for k in keys:
     lines_to_remove = []
     for line in groups[k]['lines']:
@@ -178,81 +223,19 @@ for k in keys:
                               ['lines'] if not np.array_equal(l, rmline)]
 
 
-# # split on group starts
-# keys = sorted(groups.keys())
-# lines_to_append_here = []
-# for i in range(1, len(keys)):
-#     start = keys[i]
-#     lines_to_remove = []
-#     lines_to_append_here = []
-#     # if i >= len(keys):
-#     #     break
-#     for line in groups[start]['lines']:
-#         y1, x1, y2, x2 = line
-#         cutoff_y = groups[keys[i-1]]['start_y']
-#         # cutoff_y = min(groups[start]['start_y'], groups[keys[i+1]]['start_y'])
-#         # cutoff_y = groups[keys[i+1]]['end_y']
-#         if y1 < cutoff_y:
-#             split_y = int(cutoff_y)
-#             slope = (y2 - y1) / (x2 - x1)
-#             split_x = int((split_y - y1) / slope) + x1
-#             # ax.scatter(split_y, split_x, color='red', s=50, marker='x')
-#             segment1 = np.array([y1, x1, split_y, split_x], dtype='int32')
-#             segment2 = np.array([split_y, split_x, y2, x2], dtype='int32')
-#             lines_to_remove.append(line)
-#             lines_to_append_here += [segment1, segment2]
-#     for l in lines_to_append_here:
-#         groups[start]['lines'].append(l)
-#     for rmline in lines_to_remove:
-#         groups[start]['lines'] = [l for l in groups[start]
-#                                   ['lines'] if not np.array_equal(l, rmline)]
-
-
-# # split on group ends
-# keys = sorted(groups.keys())
-# lines_to_append_to_next = []
-# for i in range(len(keys)):
-#     start = keys[i]
-#     lines_to_remove = []
-#     lines_to_append_to_next = []
-#     if i >= len(keys) - 1:
-#         break
-#     for line in groups[start]['lines']:
-#         y1, x1, y2, x2 = line
-#         cutoff_y = groups[start]['start_y']
-#         # cutoff_y = min(groups[start]['start_y'], groups[keys[i+1]]['start_y'])
-#         # cutoff_y = groups[keys[i+1]]['end_y']
-#         if y2 > cutoff_y:
-#             split_y = int(cutoff_y)
-#             slope = (y2 - y1) / (x2 - x1)
-#             split_x = int((split_y - y1) / slope) + x1
-#             # ax.scatter(split_y, split_x, color='red', s=50, marker='x')
-#             segment1 = np.array([y1, x1, split_y, split_x], dtype='int32')
-#             segment2 = np.array([split_y, split_x, y2, x2], dtype='int32')
-#             lines_to_remove.append(line)
-#             lines_to_append_to_next += [segment1, segment2]
-#     for l in lines_to_append_to_next:
-#         groups[keys[i+1]]['lines'].append(l)
-#     for rmline in lines_to_remove:
-#         groups[start]['lines'] = [l for l in groups[start]
-#                                   ['lines'] if not np.array_equal(l, rmline)]
-
-print("plotting...")
-# pprint(groups)
 random.seed(47)
 for start in groups.keys():
     color = random.choice(list(mcolors.CSS4_COLORS.keys()))
-    ax.plot([0, self_crp.shape[1]], [groups[start]['start_y'],
-            groups[start]['start_y']], color=color)
-    ax.plot([groups[start]['start_y'], groups[start]['start_y']],
+    ax.plot([0, self_crp.shape[1]], [groups[start]['start_x'],
+            groups[start]['start_x']], color=color)
+    ax.plot([groups[start]['start_x'], groups[start]['start_x']],
             [0, self_crp.shape[1]], color=color)
-    ax.plot([0, self_crp.shape[1]], [groups[start]['end_y'],
-            groups[start]['end_y']], color=color)
-    ax.plot([groups[start]['end_y'], groups[start]['end_y']],
+    ax.plot([0, self_crp.shape[1]], [groups[start]['end_x'],
+            groups[start]['end_x']], color=color)
+    ax.plot([groups[start]['end_x'], groups[start]['end_x']],
             [0, self_crp.shape[1]], color=color)
     for line in groups[start]['lines']:
         y1, x1, y2, x2 = line
         ax.plot([y1, y2,], [x1, x2], color=color)
         ax.scatter([y1, y2,], [x1, x2], color='red', s=10, zorder=2.02)
-
 plt.show()
